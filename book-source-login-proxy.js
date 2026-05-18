@@ -1,154 +1,133 @@
 // book-source-login-proxy.js
-// 零依赖，纯 Node.js 内置模块
-// node book-source-login-proxy.js
+// 直接调用大灰狼书源登录API - 无需执行56KB JS
 
 const http = require('http');
 const https = require('https');
-const vm = require('vm');
+const url = require('url');
 
 const PORT = 5013;
 const sessions = new Map();
 
-function httpGet(urlStr) {
-    return new Promise(resolve => {
-        const get = urlStr.startsWith('https') ? https.get : http.get;
-        const req = get(urlStr, res => {
-            let d = ''; res.on('data', c => d += c);
-            res.on('end', () => resolve(d));
-        });
-        req.on('error', () => resolve(''));
-        req.setTimeout(10000, () => { req.destroy(); resolve(''); });
-    });
-}
+// 大灰狼书源默认服务器列表
+const DEFAULT_SERVERS = [
+    'https://svip.langge.cf',
+    'https://sy.langge.cf', 
+    'https://api.langge.cf',
+    'http://219.154.201.122',
+];
 
-function createBridge(sourceUrl) {
-    const s = sessions.get(sourceUrl) || { variable: '{}', cookies: {} };
-    const hostList = [sourceUrl];
-    const app = { key: '' };
-    
-    return {
-        java: {
-            ajax: u => httpGet(u),
-            toast: m => console.log('[Toast]', m),
-            longToast: m => console.log('[Toast]', m),
-            startBrowser: u => httpGet(u),
-            androidId: () => 'reader-proxy',
-            deviceID: () => 'reader-proxy',
-            base64Encode: s => Buffer.from(s).toString('base64'),
-            base64Decode: s => Buffer.from(s, 'base64').toString(),
-            qread: () => { throw new Error('not qread'); },
-            cacheFile: u => httpGet(u),
-        },
-        source: {
-            getVariable: () => s.variable,
-            setVariable: v => { s.variable = v; },
-            getLoginInfoMap: () => { try { return JSON.parse(s.variable); } catch { return {}; } },
-        },
-        cookie: {
-            getCookie: u => s.cookies[u] || '',
-            setCookie: (u, c) => { s.cookies[u] = c; },
-        },
-        host: hostList,
-        app: app,
-    };
+function httpRequest(method, urlStr, body, headers) {
+    return new Promise((resolve, reject) => {
+        const u = new URL(urlStr);
+        const client = u.protocol === 'https:' ? https : http;
+        const options = {
+            method, hostname: u.hostname, port: u.port,
+            path: u.pathname + u.search,
+            headers: headers || { 'Content-Type': 'application/json' },
+            timeout: 15000,
+        };
+        const req = client.request(options, res => {
+            const setCookie = res.headers['set-cookie'] || [];
+            let d = '';
+            res.on('data', c => d += c);
+            res.on('end', () => resolve({ status: res.statusCode, body: d, cookies: setCookie }));
+        });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+        if (body) req.write(typeof body === 'string' ? body : JSON.stringify(body));
+        req.end();
+    });
 }
 
 const server = http.createServer(async (req, res) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    
-    if (req.method === 'OPTIONS') {
-        res.writeHead(200); res.end(); return;
-    }
+    if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
-    const reqUrl = new URL(req.url, `http://localhost:${PORT}`);
-    const path = reqUrl.pathname;
-
+    const path = new URL(req.url, `http://localhost:${PORT}`).pathname;
     let body = '';
     req.on('data', c => body += c);
-
+    
     req.on('end', async () => {
         let json = {};
         try { json = JSON.parse(body); } catch {}
 
         try {
-            // GET /health
-            if (path === '/health') {
-                return send(res, 200, { ok: true, sessions: sessions.size });
-            }
+            if (path === '/health') return send(res, 200, { ok: true, sessions: sessions.size });
 
-            // GET/POST /status
-            if (path === '/status') {
-                const su = reqUrl.searchParams.get('sourceUrl') || json.sourceUrl;
-                const s = sessions.get(su);
-                return send(res, 200, { loggedIn: !!s, cookies: s?.cookies || {} });
-            }
-
-            // POST /logout
-            if (path === '/logout') {
-                sessions.delete(json.sourceUrl);
-                return send(res, 200, { ok: true });
-            }
-
-            // POST /login
+            // === 登录 API ===
             if (path === '/login' && req.method === 'POST') {
-                const { sourceUrl, loginUrl, loginData } = json;
-                if (!sourceUrl || !loginUrl) {
-                    return send(res, 400, { error: '缺少 sourceUrl 或 loginUrl' });
-                }
+                const { email, password, key, server } = json;
+                if (!email && !key) return send(res, 400, { error: '请提供 email 或 key' });
 
-                // 初始化 session
-                if (!sessions.has(sourceUrl)) {
-                    sessions.set(sourceUrl, { variable: JSON.stringify(loginData || {}), cookies: {} });
-                }
+                const baseUrl = server || DEFAULT_SERVERS[0];
+                const deviceKey = 'reader-' + Math.random().toString(36).slice(2, 10);
 
-                // 提取 JS
-                let js = loginUrl.replace(/<js>/g, '').replace(/<\/js>/g, '').trim();
-                if (!js) return send(res, 200, { success: true, msg: '无需执行JS' });
+                // 尝试每个服务器
+                const servers = server ? [server] : [...DEFAULT_SERVERS];
+                let lastError = '';
+                
+                for (const srv of servers) {
+                    try {
+                        console.log(`尝试登录: ${srv}`);
+                        const loginBody = {
+                            login_email: email || '',
+                            password: password || '',
+                            key: key || '',
+                            device: 'android',
+                            deviceKey: deviceKey,
+                        };
 
-                // 如果 JS 中没有 function/var/return，可能是直接 URL
-                if (!js.includes('function') && !js.includes('var ') && !js.includes('return')) {
-                    if (js.startsWith('http')) {
-                        const result = await httpGet(js);
-                        return send(res, 200, { success: true, msg: '网页登录', loginPageUrl: js });
+                        const result = await httpRequest('POST', `${srv}/login_api`, loginBody);
+                        const data = JSON.parse(result.body);
+
+                        if (data.code === 0) {
+                            // 登录成功，存储 session
+                            sessions.set(email || key, {
+                                server: srv,
+                                cookies: result.cookies,
+                                token: data.data?.token || '',
+                                loginTime: new Date().toISOString(),
+                            });
+                            return send(res, 200, {
+                                success: true,
+                                server: srv,
+                                cookies: result.cookies,
+                                cookieString: result.cookies.join('; '),
+                                token: data.data?.token || '',
+                            });
+                        }
+                        lastError = data.msg || `code=${data.code}`;
+                        console.log(`  ${srv}: ${lastError}`);
+                    } catch (e) {
+                        lastError = e.message;
+                        console.log(`  ${srv}: 连接失败 - ${e.message}`);
                     }
                 }
+                return send(res, 401, { success: false, error: lastError || '所有服务器登录失败' });
+            }
 
-                // 创建沙箱执行 JS
-                const bridge = createBridge(sourceUrl);
-                const ctx = vm.createContext({
-                    java: bridge.java,
-                    source: bridge.source,
-                    cookie: bridge.cookie,
-                    host: bridge.host,
-                    app: bridge.app,
-                    JSON: JSON,
-                    console: { log: () => {}, error: () => {} },
-                    setTimeout: () => {},
+            // === 检查状态 ===
+            if (path === '/status') {
+                const key = json.email || json.key || new URL(req.url, `http://localhost:${PORT}`).searchParams.get('email');
+                const s = sessions.get(key);
+                return send(res, 200, {
+                    loggedIn: !!s,
+                    server: s?.server || '',
+                    loginTime: s?.loginTime || '',
+                    cookieString: s?.cookies?.join('; ') || '',
                 });
+            }
 
-                try {
-                    const result = vm.runInContext(js, ctx, { timeout: 30000 });
-                    const s = sessions.get(sourceUrl);
-                    return send(res, 200, {
-                        success: true,
-                        msg: '登录执行完成',
-                        cookies: s?.cookies || {},
-                        variable: s?.variable || '{}',
-                        result: typeof result === 'string' ? result.slice(0, 200) : null,
-                    });
-                } catch (e) {
-                    // JS 执行失败可能是正常的（比如依赖浏览器环境）
-                    return send(res, 200, {
-                        success: true,
-                        msg: 'JS 部分执行（可能需要浏览器登录）',
-                        error: e.message,
-                    });
-                }
+            // === 登出 ===
+            if (path === '/logout') {
+                sessions.delete(json.email || json.key);
+                return send(res, 200, { ok: true });
             }
 
             send(res, 404, { error: 'Not found' });
         } catch (e) {
+            console.error(e);
             send(res, 500, { error: e.message });
         }
     });
@@ -160,9 +139,10 @@ function send(res, code, data) {
 }
 
 server.listen(PORT, () => {
-    console.log(`✅ 书源登录代理已启动: http://localhost:${PORT}`);
-    console.log(`   POST /login  - 执行书源登录`);
-    console.log(`   GET  /status - 检查登录状态`);
-    console.log(`   POST /logout - 登出`);
-    console.log(`   GET  /health - 健康检查`);
+    console.log('登录代理已启动: http://localhost:' + PORT);
+    console.log('  POST /login  - 登录 (参数: email, password, key, server)');
+    console.log('  GET  /status - 检查状态 (参数: email)');
+    console.log('  POST /logout - 登出');
+    console.log('  GET  /health - 健康检查');
+    console.log('服务器列表:', DEFAULT_SERVERS.join(', '));
 });
