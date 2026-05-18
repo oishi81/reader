@@ -10,10 +10,10 @@ const sessions = new Map();
 
 // 大灰狼书源默认服务器列表
 const DEFAULT_SERVERS = [
+    'https://legado.langge.cf',
     'https://svip.langge.cf',
     'https://sy.langge.cf', 
     'https://api.langge.cf',
-    'http://219.154.201.122',
 ];
 
 function httpRequest(method, urlStr, body, headers) {
@@ -25,6 +25,7 @@ function httpRequest(method, urlStr, body, headers) {
             path: u.pathname + u.search,
             headers: headers || { 'Content-Type': 'application/json' },
             timeout: 15000,
+            rejectUnauthorized: false,
         };
         const req = client.request(options, res => {
             const setCookie = res.headers['set-cookie'] || [];
