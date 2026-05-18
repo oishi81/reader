@@ -60,6 +60,26 @@ const server = http.createServer(async (req, res) => {
                 const { email, password, key, server } = json;
                 if (!email && !key) return send(res, 400, { error: '请提供 email 或 key' });
 
+                // === key 登录：直接作为 token，不需要调 API ===
+                if (key && !email) {
+                    const deviceId = 'reader-' + Math.random().toString(36).slice(2, 10);
+                    const cookieStr = `qttoken=${key};deviceId=${deviceId}`;
+                    sessions.set(key, {
+                        server: server || DEFAULT_SERVERS[0],
+                        cookies: [cookieStr],
+                        token: key,
+                        loginTime: new Date().toISOString(),
+                    });
+                    return send(res, 200, {
+                        success: true,
+                        server: server || DEFAULT_SERVERS[0],
+                        cookieString: cookieStr,
+                        token: key,
+                    });
+                }
+
+                // === 邮箱密码登录 ===
+
                 const baseUrl = server || DEFAULT_SERVERS[0];
                 const deviceKey = 'reader-' + Math.random().toString(36).slice(2, 10);
 
@@ -71,30 +91,24 @@ const server = http.createServer(async (req, res) => {
                     try {
                         console.log(`尝试登录: ${srv}`);
                         const loginBody = {
-                            login_email: email || '',
+                            register_email: email || '',
                             password: password || '',
-                            key: key || '',
-                            device: 'android',
-                            deviceKey: deviceKey,
                         };
 
                         const result = await httpRequest('POST', `${srv}/login_api`, loginBody);
                         const data = JSON.parse(result.body);
 
                         if (data.code === 0) {
-                            // 登录成功，存储 session
-                            sessions.set(email || key, {
-                                server: srv,
-                                cookies: result.cookies,
-                                token: data.data?.token || '',
-                                loginTime: new Date().toISOString(),
+                            const token = data.key || data.data?.key || '';
+                            const deviceId = 'reader-' + Math.random().toString(36).slice(2, 10);
+                            const cookieStr = `qttoken=${token};deviceId=${deviceId}`;
+                            sessions.set(email, {
+                                server: srv, cookies: result.cookies, token,
+                                cookieStr, loginTime: new Date().toISOString(),
                             });
                             return send(res, 200, {
-                                success: true,
-                                server: srv,
-                                cookies: result.cookies,
-                                cookieString: result.cookies.join('; '),
-                                token: data.data?.token || '',
+                                success: true, server: srv,
+                                cookies: result.cookies, cookieString: cookieStr, token,
                             });
                         }
                         lastError = data.msg || `code=${data.code}`;
