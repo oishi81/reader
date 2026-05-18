@@ -1,0 +1,62 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'src/**'
+      - 'web/**'
+      - 'cli.gradle'
+      - 'Dockerfile.source'
+      - '.github/workflows/docker-build.yml'
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: oishi1981/reader
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=
+
+      - name: Build and push Docker image (source build, multi-arch)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.source
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-to: type=inline

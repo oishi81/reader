@@ -1,39 +1,39 @@
-FROM node:lts-alpine3.14 AS build-web
+# ===========================================
+# 多阶段构建 - 支持 amd64 + arm64
+# ===========================================
+
+# Stage 1: 构建前端
+FROM node:18-alpine AS build-web
 ADD . /app
 WORKDIR /app/web
-# Build web
 RUN yarn && yarn build
 
-# Build jar
-FROM gradle:6.1.1-jdk8 AS build-env
-ADD --chown=gradle:gradle . /app
+# Stage 2: 编译 JAR（使用 Gradle + JDK8）
+FROM eclipse-temurin:8-jdk AS build-env
+ADD . /app
 WORKDIR /app
 COPY --from=build-web /app/web/dist /app/src/main/resources/web
-RUN \
-    rm src/main/java/com/htmake/reader/ReaderUIApplication.kt; \
-    gradle -b cli.gradle assemble --info; \
+# 移除桌面UI类（服务器版不需要）
+RUN rm -f src/main/java/com/htmake/reader/ReaderUIApplication.kt
+# 编译
+RUN ./gradlew -b cli.gradle assemble --info --no-daemon && \
     mv ./build/libs/*.jar ./build/libs/reader.jar
 
-FROM amazoncorretto:8u332-alpine3.14-jre
-# Install base packages
-RUN \
-    # apk update; \
-    # apk upgrade; \
-    # Add CA certs tini tzdata
-    apk add --no-cache ca-certificates tini tzdata; \
-    update-ca-certificates; \
-    # Clean APK cache
-    rm -rf /var/cache/apk/*;
+# Stage 3: 运行时镜像（轻量JRE，多架构支持）
+FROM eclipse-temurin:8-jre
 
-# 时区
-ENV TZ=Asia/Shanghai
+# 安装必要工具
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends tini curl ca-certificates tzdata && \
+    ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    dpkg-reconfigure --frontend noninteractive tzdata && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-#RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-#  && echo Asia/Shanghai > /etc/timdezone \
-#  && dpkg-reconfigure -f noninteractive tzdata
+ENV TZ=Asia/Shanghai \
+    JAVA_OPTS="-Xms128m -Xmx512m -XX:+UseG1GC"
 
 EXPOSE 8080
-ENTRYPOINT ["/sbin/tini", "--"]
-# COPY --from=hengyunabc/arthas:latest /opt/arthas /opt/arthas
+ENTRYPOINT ["/usr/bin/tini", "--"]
 COPY --from=build-env /app/build/libs/reader.jar /app/bin/reader.jar
-CMD ["java", "-jar", "/app/bin/reader.jar" ]
+CMD ["java", "-jar", "/app/bin/reader.jar"]
