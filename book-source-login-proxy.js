@@ -55,6 +55,21 @@ const server = http.createServer(async (req, res) => {
         try {
             if (path === '/health') return send(res, 200, { ok: true, sessions: sessions.size });
 
+            // === 调试：探测服务器 ===
+            if (path === '/probe') {
+                const server = json.server || DEFAULT_SERVERS[0];
+                const results = {};
+                for (const p of ['/login_api', '/api/login', '/login', '/']) {
+                    try {
+                        const r = await httpRequest('GET', `${server}${p}`, null, {
+                            'User-Agent': 'Mozilla/5.0',
+                        });
+                        results[p] = `${r.status} ${(r.body||'').slice(0, 100)}`;
+                    } catch(e) { results[p] = e.message; }
+                }
+                return send(res, 200, results);
+            }
+
             // === 登录 API ===
             if (path === '/login' && req.method === 'POST') {
                 const { email, password, key, server } = json;
@@ -95,7 +110,11 @@ const server = http.createServer(async (req, res) => {
                             password: password || '',
                         };
 
-                        const result = await httpRequest('POST', `${srv}/login_api`, loginBody);
+                        const headers = {
+                            'Content-Type': 'application/json',
+                            'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Mobile Safari/537.36',
+                        };
+                        const result = await httpRequest('POST', `${srv}/login_api`, loginBody, headers);
                         const data = JSON.parse(result.body);
 
                         if (data.code === 0) {
