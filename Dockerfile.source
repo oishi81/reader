@@ -1,5 +1,5 @@
 # ===========================================
-# 多阶段构建 - 支持 amd64 + arm64
+# 多阶段构建
 # ===========================================
 
 # Stage 1: 构建前端
@@ -8,19 +8,17 @@ ADD . /app
 WORKDIR /app/web
 RUN yarn && yarn build
 
-# Stage 2: 编译 JAR（使用 Gradle 官方镜像，支持多架构）
-FROM gradle:7.6-jdk8 AS build-env
+# Stage 2: 编译 JAR
+FROM gradle:6.1.1-jdk8 AS build-env
 ADD . /app
 WORKDIR /app
 COPY --from=build-web /app/web/dist /app/src/main/resources/web
-# 移除桌面UI类（服务器版不需要）
 RUN rm -f src/main/java/com/htmake/reader/ReaderUIApplication.kt && \
     gradle -b cli.gradle assemble --info --no-daemon && \
     mv ./build/libs/*.jar ./build/libs/reader.jar
 
 # Stage 3: 运行时镜像
 FROM eclipse-temurin:8-jre
-# 安装必要工具
 RUN apt-get update && \
     apt-get install -y --no-install-recommends tini curl ca-certificates tzdata && \
     ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
