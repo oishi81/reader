@@ -1,0 +1,32 @@
+# ===========================================
+# iStoreOS ARM64 原地构建 Dockerfile
+# 路由器本地运行: docker build -t myreader:arm64 -f Dockerfile.arm64 .
+# ===========================================
+
+FROM node:16-alpine AS build-web
+ADD . /app
+WORKDIR /app/web
+RUN yarn && yarn build
+
+FROM gradle:6.1.1-jdk8 AS build-env
+ADD --chown=gradle:gradle . /app
+WORKDIR /app
+COPY --from=build-web /app/web/dist /app/src/main/resources/web
+RUN rm -f src/main/java/com/htmake/reader/ReaderUIApplication.kt && \
+    gradle -b cli.gradle assemble --info --no-daemon && \
+    mv ./build/libs/*.jar ./build/libs/reader.jar
+
+FROM eclipse-temurin:8-jre
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends tini curl tzdata && \
+    ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    dpkg-reconfigure --frontend noninteractive tzdata && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV TZ=Asia/Shanghai JAVA_OPTS="-Xms128m -Xmx384m -XX:+UseG1GC"
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8080/reader3/getSystemInfo || exit 1
+ENTRYPOINT ["/usr/bin/tini", "--"]
+COPY --from=build-env /app/build/libs/reader.jar /app/bin/reader.jar
+CMD ["java", "-jar", "/app/bin/reader.jar"]
