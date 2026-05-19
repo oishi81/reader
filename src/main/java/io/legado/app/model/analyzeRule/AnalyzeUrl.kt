@@ -244,6 +244,30 @@ class AnalyzeUrl(
         bindings["book"] = ruleData as? Book
         bindings["source"] = source
         bindings["result"] = result
+        // 兼容大灰狼等复杂书源：提供 getArguments / setArguments 方法
+        bindings["getArguments"] = { jsonStr: String?, key: String? ->
+            if (jsonStr.isNullOrBlank() || key.isNullOrBlank()) ""
+            else try {
+                val obj = io.vertx.core.json.JsonObject(jsonStr)
+                obj.getValue(key)?.toString() ?: ""
+            } catch (e: Exception) {
+                try {
+                    val gsonObj = io.legado.app.utils.GSON.fromJsonObject<Map<String, Any>>(jsonStr)
+                    gsonObj.getOrNull()?.get(key)?.toString() ?: ""
+                } catch (e2: Exception) { "" }
+            }
+        }
+        bindings["setArguments"] = { key: String?, value: Any? ->
+            if (key.isNullOrBlank()) return@SimpleBindings
+            val source = this@AnalyzeUrl.source ?: return@SimpleBindings
+            val existing = source.variable ?: ""
+            val map = if (existing.isBlank()) mutableMapOf<String, Any>()
+            else try {
+                io.legado.app.utils.GSON.fromJsonObject<MutableMap<String, Any>>(existing).getOrElse { mutableMapOf() }
+            } catch (e: Exception) { mutableMapOf() }
+            map[key] = value?.toString() ?: ""
+            source.variable = io.legado.app.utils.GSON.toJson(map)
+        }
         return SCRIPT_ENGINE.eval(jsStr, bindings)
     }
 
