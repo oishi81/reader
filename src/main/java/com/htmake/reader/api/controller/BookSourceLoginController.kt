@@ -1,18 +1,11 @@
 package com.htmake.reader.api.controller
 
 import io.legado.app.data.entities.BookSource
-import io.legado.app.utils.GSON
 import io.vertx.ext.web.RoutingContext
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import mu.KotlinLogging
-import com.htmake.reader.utils.success
-import com.htmake.reader.utils.error
-import com.htmake.reader.utils.ReturnData
+import com.htmake.reader.api.ReturnData
 import com.htmake.reader.utils.asJsonObject
 import com.htmake.reader.utils.getStorage
-import com.htmake.reader.utils.saveStorage
 import io.vertx.core.json.JsonObject
 import io.vertx.core.json.JsonArray
 import kotlin.coroutines.CoroutineContext
@@ -24,7 +17,6 @@ private val logger = KotlinLogging.logger {}
  * 处理书源登录、登出、状态检查等功能
  */
 class BookSourceLoginController(coroutineContext: CoroutineContext): BaseController(coroutineContext) {
-    private val scope = CoroutineScope(Dispatchers.Default)
 
     /**
      * 执行书源登录
