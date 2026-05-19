@@ -136,14 +136,6 @@ class YueduApi : RestVerticle() {
         val replaceRuleController = ReplaceRuleController(coroutineContext)
         val bookmarkController = BookmarkController(coroutineContext)
 
-        /** 书源登录模块 */
-        val bookSourceLoginController = BookSourceLoginController(coroutineContext)
-        router.post("/reader3/bookSourceLogin").coroutineHandler { bookSourceLoginController.bookSourceLogin(it) }
-        router.get("/reader3/bookSourceLoginInfo").coroutineHandler { bookSourceLoginController.getBookSourceLoginInfo(it) }
-        router.post("/reader3/bookSourceLogout").coroutineHandler { bookSourceLoginController.bookSourceLogout(it) }
-        router.get("/reader3/bookSourceLoginStatus").coroutineHandler { bookSourceLoginController.checkLoginStatus(it) }
-        router.get("/reader3/loginPage").coroutineHandler { bookSourceLoginController.getLoginPage(it) }
-
         /** 书源模块 */
         router.post("/reader3/saveBookSource").coroutineHandler { bookSourceController.saveBookSource(it) }
         router.post("/reader3/saveBookSources").coroutineHandler { bookSourceController.saveBookSources(it) }
