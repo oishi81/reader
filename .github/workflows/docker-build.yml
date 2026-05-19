@@ -16,22 +16,15 @@ jobs:
           node-version: '16'
 
       - name: Build Web
-        run: |
-          cd web
-          yarn --ignore-engines
-          yarn build --ignore-engines
-          cd ..
+        run: cd web && yarn --ignore-engines && yarn build --ignore-engines && cd ..
 
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '11'
-          distribution: 'temurin'
-
-      - name: Build JAR
+      - name: Build JAR in Docker
         run: |
-          rm -f src/main/java/com/htmake/reader/ReaderUIApplication.kt
-          chmod +x gradlew
-          ./gradlew -b cli.gradle assemble --no-daemon --info
+          docker run --rm -v $PWD:/app -w /app gradle:6.1.1-jdk8 sh -c '
+            cp -r web/dist/* src/main/resources/web/
+            rm -f src/main/java/com/htmake/reader/ReaderUIApplication.kt
+            gradle -b cli.gradle assemble --no-daemon
+          '
           mkdir -p docker-build/app/bin
           mv build/libs/*.jar docker-build/app/bin/reader.jar
 
@@ -47,11 +40,8 @@ jobs:
         run: |
           cat > docker-build/Dockerfile << 'DOCKERFILE'
           FROM eclipse-temurin:8-jre
-          RUN apt-get update && \
-              apt-get install -y --no-install-recommends tini curl ca-certificates tzdata && \
-              ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
-              apt-get clean && rm -rf /var/lib/apt/lists/*
-          ENV TZ=Asia/Shanghai JAVA_OPTS="-Xms128m -Xmx512m -XX:+UseG1GC"
+          RUN apt-get update && apt-get install -y --no-install-recommends tini curl tzdata && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && apt-get clean && rm -rf /var/lib/apt/lists/*
+          ENV TZ=Asia/Shanghai JAVA_OPTS="-Xms128m -Xmx512m"
           EXPOSE 8080
           ENTRYPOINT ["/usr/bin/tini", "--"]
           COPY app/bin/reader.jar /app/bin/reader.jar
