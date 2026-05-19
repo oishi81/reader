@@ -1,25 +1,27 @@
-FROM node:16-alpine AS build-web
-ADD . /app
-WORKDIR /app/web
-RUN yarn && yarn build
+# ===========================================
+# 多架构 Dockerfile（web 预编译版）
+# web 在 GitHub Actions runner 上预编译后放入 src/main/resources/web
+# Docker 只负责 Gradle 编译 + JRE 打包
+# ===========================================
 
 FROM gradle:6.1.1-jdk8 AS build-env
-ADD --chown=gradle:gradle . /app
+ADD . /app
 WORKDIR /app
-COPY --from=build-web /app/web/dist /app/src/main/resources/web
-RUN \
-    rm src/main/java/com/htmake/reader/ReaderUIApplication.kt; \
-    gradle -b cli.gradle assemble --info; \
+RUN rm -f src/main/java/com/htmake/reader/ReaderUIApplication.kt && \
+    gradle -b cli.gradle assemble --no-daemon --info && \
     mv ./build/libs/*.jar ./build/libs/reader.jar
 
-FROM amazoncorretto:8u332-alpine3.14-jre
-RUN \
-    apk add --no-cache ca-certificates tini tzdata; \
-    update-ca-certificates; \
-    rm -rf /var/cache/apk/*;
+FROM eclipse-temurin:8-jre
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends tini curl ca-certificates tzdata && \
+    ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    dpkg-reconfigure --frontend noninteractive tzdata && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-ENV TZ=Asia/Shanghai
+ENV TZ=Asia/Shanghai JAVA_OPTS="-Xms128m -Xmx512m -XX:+UseG1GC"
 EXPOSE 8080
-ENTRYPOINT ["/sbin/tini", "--"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8080/reader3/getSystemInfo || exit 1
+ENTRYPOINT ["/usr/bin/tini", "--"]
 COPY --from=build-env /app/build/libs/reader.jar /app/bin/reader.jar
-CMD ["java", "-jar", "/app/bin/reader.jar" ]
+CMD ["java", "-jar", "/app/bin/reader.jar"]
