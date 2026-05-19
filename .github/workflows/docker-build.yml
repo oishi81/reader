@@ -20,10 +20,11 @@ jobs:
 
       - name: Build JAR in Docker
         run: |
-          docker run --rm -v $PWD:/app -w /app gradle:6.1.1-jdk8 sh -c '
+          docker run --rm -v $PWD:/app -w /app eclipse-temurin:11-jdk sh -c '
             cp -r web/dist/* src/main/resources/web/
             rm -f src/main/java/com/htmake/reader/ReaderUIApplication.kt
-            gradle -b cli.gradle assemble --no-daemon
+            chmod +x gradlew
+            ./gradlew -b cli.gradle assemble --no-daemon
           '
           mkdir -p docker-build/app/bin
           mv build/libs/*.jar docker-build/app/bin/reader.jar
