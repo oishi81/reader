@@ -1,6 +1,7 @@
 buildscript {
     ext.kotlin_version = '1.5.21'
     repositories {
+        maven { url "https://maven.aliyun.com/repository/public" }
         mavenCentral()
     }
     dependencies {
@@ -21,6 +22,8 @@ version = '2.5.4'
 sourceCompatibility = '1.8'
 
 repositories {
+    maven { url "https://maven.aliyun.com/repository/public" }
+    maven { url "https://maven.aliyun.com/repository/central" }
     mavenCentral()
     maven { url "https://jitpack.io" }
     maven { url "https://gitlab.com/api/v4/projects/26729549/packages/maven" }
