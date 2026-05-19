@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Build and Push Multi-Arch Docker Image
 
 on:
   push:
@@ -10,6 +10,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+
+      - name: Build Web
+        run: |
+          cd web
+          yarn --ignore-engines
+          yarn build --ignore-engines
+          cd ..
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Build JAR
+        run: |
+          rm -f src/main/java/com/htmake/reader/ReaderUIApplication.kt
+          chmod +x gradlew
+          ./gradlew -b cli.gradle assemble --no-daemon --info
+          mkdir -p docker-build/app/bin
+          mv build/libs/*.jar docker-build/app/bin/reader.jar
+
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
@@ -18,10 +43,24 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Create Dockerfile
+        run: |
+          cat > docker-build/Dockerfile << 'DOCKERFILE'
+          FROM eclipse-temurin:8-jre
+          RUN apt-get update && \
+              apt-get install -y --no-install-recommends tini curl ca-certificates tzdata && \
+              ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+              apt-get clean && rm -rf /var/lib/apt/lists/*
+          ENV TZ=Asia/Shanghai JAVA_OPTS="-Xms128m -Xmx512m -XX:+UseG1GC"
+          EXPOSE 8080
+          ENTRYPOINT ["/usr/bin/tini", "--"]
+          COPY app/bin/reader.jar /app/bin/reader.jar
+          CMD ["java", "-jar", "/app/bin/reader.jar"]
+          DOCKERFILE
+
       - uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./Dockerfile.arm64
+          context: ./docker-build
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
