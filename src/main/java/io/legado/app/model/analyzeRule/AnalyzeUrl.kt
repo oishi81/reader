@@ -250,23 +250,19 @@ class AnalyzeUrl(
             else try {
                 val obj = io.vertx.core.json.JsonObject(jsonStr)
                 obj.getValue(key)?.toString() ?: ""
-            } catch (e: Exception) {
-                try {
-                    val gsonObj = io.legado.app.utils.GSON.fromJsonObject<Map<String, Any>>(jsonStr)
-                    gsonObj.getOrNull()?.get(key)?.toString() ?: ""
-                } catch (e2: Exception) { "" }
-            }
+            } catch (e: Exception) { "" }
         }
         bindings["setArguments"] = { key: String?, value: Any? ->
-            if (key.isNullOrBlank()) return@SimpleBindings
-            val source = this@AnalyzeUrl.source ?: return@SimpleBindings
-            val existing = source.variable ?: ""
-            val map = if (existing.isBlank()) mutableMapOf<String, Any>()
-            else try {
-                io.legado.app.utils.GSON.fromJsonObject<MutableMap<String, Any>>(existing).getOrElse { mutableMapOf() }
-            } catch (e: Exception) { mutableMapOf() }
-            map[key] = value?.toString() ?: ""
-            source.variable = io.legado.app.utils.GSON.toJson(map)
+            val src = this@AnalyzeUrl.source ?: null
+            if (key.isNullOrBlank() || src == null) { }
+            else {
+                val existing = src.getVariable() ?: ""
+                val valueStr = value?.toString() ?: ""
+                // simple JSON storage: use , as delimiter
+                val newVar = if (existing.isBlank()) "$key=$valueStr"
+                else "$existing,$key=$valueStr"
+                src.setVariable(newVar)
+            }
         }
         return SCRIPT_ENGINE.eval(jsStr, bindings)
     }
