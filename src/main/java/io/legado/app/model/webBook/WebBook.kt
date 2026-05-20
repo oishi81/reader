@@ -138,6 +138,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
      * 书籍信息
      */
     suspend fun getBookInfo(bookUrl: String, canReName: Boolean = true): Book {
+        println("=== getBookInfo called, bookUrl: " + bookUrl.take(100))
         val book = Book()
         book.bookUrl = bookUrl
         book.origin = bookSource.bookSourceUrl
@@ -152,10 +153,10 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
             headerMapF = bookSource.getHeaderMap(true)
         )
         var res: StrResponse
-        // 处理 data: URL（大灰狼书源搜索结果使用 base64 编码书数据）
+        // 处理 data: URL
         if (book.bookUrl.startsWith("data:")) {
             res = dataUrlToResponse(book.bookUrl)
-            logger.info("dataUrlToResponse body (first 200): {}", res.body?.take(200))
+            println("=== dataUrlToResponse body: " + res.body?.take(300))
         } else {
             res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
             // 检测书源是否已登录
