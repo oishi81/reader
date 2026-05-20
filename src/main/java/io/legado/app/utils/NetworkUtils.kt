@@ -77,6 +77,8 @@ object NetworkUtils {
     fun getAbsoluteURL(baseURL: String?, relativePath: String): String {
         if (baseURL.isNullOrEmpty()) return relativePath
         if (relativePath.isNullOrEmpty()) return baseURL
+        // data: URL 无法做 base URL 解析，直接返回 relativePath
+        if (baseURL.startsWith("data:") || relativePath.startsWith("data:")) return relativePath
         var relativeUrl = relativePath
         try {
             val absoluteUrl = URL(baseURL.substringBefore(","))
