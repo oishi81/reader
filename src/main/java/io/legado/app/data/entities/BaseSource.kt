@@ -158,6 +158,9 @@ interface BaseSource : JsExtensions {
         bindings["baseUrl"] = getKey()
         bindings["cookie"] = CookieStore
         bindings["cache"] = CacheManager
-        return AppConst.SCRIPT_ENGINE.eval(jsStr, bindings)
+        // 注入jsLib（大灰狼等书源的共享JS库），使host/getArguments/setArguments等变量可用
+        val lib = (this as? BookSource)?.jsLib
+        val combinedJs = if (lib.isNullOrBlank()) jsStr else "$lib;\n$jsStr"
+        return AppConst.SCRIPT_ENGINE.eval(combinedJs, bindings)
     }
 }

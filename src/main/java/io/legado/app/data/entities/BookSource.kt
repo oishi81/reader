@@ -50,6 +50,7 @@ data class BookSource(
     var ruleContent: ContentRule? = null,            // 正文页规则
     var bookSourceComment: String? = null,           // 注释
     var respondTime: Long = 180000L,               // 响应时间，用于排序
+    var jsLib: String? = null,                     // JS共享库（大灰狼等书源使用）
 ) : BaseSource {
 //    @Ignore
 //    @IgnoredOnParcel

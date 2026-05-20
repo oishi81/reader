@@ -244,27 +244,10 @@ class AnalyzeUrl(
         bindings["book"] = ruleData as? Book
         bindings["source"] = source
         bindings["result"] = result
-        // 兼容大灰狼等复杂书源：提供 getArguments / setArguments 方法
-        bindings["getArguments"] = { jsonStr: String?, key: String? ->
-            if (jsonStr.isNullOrBlank() || key.isNullOrBlank()) ""
-            else try {
-                val obj = io.vertx.core.json.JsonObject(jsonStr)
-                obj.getValue(key)?.toString() ?: ""
-            } catch (e: Exception) { "" }
-        }
-        bindings["setArguments"] = { key: String?, value: Any? ->
-            val src = this@AnalyzeUrl.source ?: null
-            if (key.isNullOrBlank() || src == null) { }
-            else {
-                val existing = src.getVariable() ?: ""
-                val valueStr = value?.toString() ?: ""
-                // simple JSON storage: use , as delimiter
-                val newVar = if (existing.isBlank()) "$key=$valueStr"
-                else "$existing,$key=$valueStr"
-                src.setVariable(newVar)
-            }
-        }
-        return SCRIPT_ENGINE.eval(jsStr, bindings)
+        // 注入jsLib（大灰狼等书源的共享JS库）
+        val lib = (source as? io.legado.app.data.entities.BookSource)?.jsLib
+        val finalJs = if (lib.isNullOrBlank()) jsStr else "$lib;\n$jsStr"
+        return SCRIPT_ENGINE.eval(finalJs, bindings)
     }
 
     fun put(key: String, value: String): String {
