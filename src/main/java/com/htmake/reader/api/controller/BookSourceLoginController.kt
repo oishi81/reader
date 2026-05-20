@@ -2,17 +2,12 @@ package com.htmake.reader.api.controller
 
 import io.legado.app.data.entities.BookSource
 import io.vertx.ext.web.RoutingContext
-import io.vertx.ext.web.client.WebClient
 import mu.KotlinLogging
 import com.htmake.reader.api.ReturnData
 import com.htmake.reader.utils.asJsonArray
-import com.htmake.reader.utils.SpringContextUtils
 import io.vertx.core.json.JsonObject
 import io.vertx.core.json.JsonArray
 import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlinx.coroutines.suspendCancellableCoroutine
 
 private val logger = KotlinLogging.logger {}
 
@@ -83,31 +78,50 @@ class BookSourceLoginController(coroutineContext: CoroutineContext): BaseControl
 
     private suspend fun tryDirectLogin(baseUrl: String, email: String, password: String): String? {
         return try {
-            val webClient = SpringContextUtils.getBean("webClient", WebClient::class.java)
             val loginUrl = "$baseUrl/login_api"
-            val body = JsonObject().put("register_email", email).put("password", password)
-            suspendCancellableCoroutine { cont ->
-                webClient.postAbs(loginUrl)
-                    .putHeader("Content-Type", "application/json")
-                    .timeout(15000)
-                    .send { ar ->
-                        if (ar.succeeded()) {
-                            val resp = ar.result()
-                            if (resp.statusCode() == 200) {
-                                val respBody = resp.bodyAsJsonObject()
-                                val token = respBody?.getString("token")
-                                    ?: try { JsonObject(respBody?.getString("data") ?: "").getString("token") } catch (e: Exception) { null }
-                                if (!token.isNullOrBlank()) {
-                                    cont.resume("{\"Cookie\":\"qttoken=$token\"}")
-                                    return@send
-                                }
-                            }
-                        }
-                        cont.resume(null)
-                    }
+            logger.info("直接登录尝试: url={}, email={}", loginUrl, email)
+            
+            val url = java.net.URL(loginUrl)
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
+
+            val body = """{"register_email":"$email","password":"$password"}"""
+            conn.outputStream.use { it.write(body.toByteArray()) }
+
+            val code = conn.responseCode
+            val respText = if (code in 200..299) 
+                conn.inputStream.bufferedReader().readText() 
+            else 
+                conn.errorStream?.bufferedReader()?.readText() ?: ""
+            
+            logger.info("直接登录响应: code={}, body={}", code, respText.take(200))
+
+            if (code == 200) {
+                val respJson = JsonObject(respText)
+                // Try various token paths
+                val token = respJson.getString("token")
+                    ?: try { JsonObject(respJson.getString("data") ?: "").getString("token") } catch (e: Exception) { null }
+                    ?: try { respJson.getJsonObject("data")?.getString("token") } catch (e: Exception) { null }
+                
+                if (!token.isNullOrBlank()) {
+                    logger.info("登录成功! token={}", token)
+                    return "{\"Cookie\":\"qttoken=$token\"}"
+                }
+                // Check set-cookie
+                val setCookie = conn.getHeaderField("set-cookie")
+                if (!setCookie.isNullOrBlank()) {
+                    logger.info("登录成功! cookie={}", setCookie)
+                    return "{\"Cookie\":\"$setCookie\"}"
+                }
             }
+            logger.warn("直接登录失败: code={}", code)
+            null
         } catch (e: Exception) {
-            logger.warn("直接登录API失败: {}", e.localizedMessage)
+            logger.warn("直接登录异常: {}", e.localizedMessage, e)
             null
         }
     }
