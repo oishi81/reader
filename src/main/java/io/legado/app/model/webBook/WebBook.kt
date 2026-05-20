@@ -266,16 +266,18 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
         val contentBody = if (bookChapter.url.startsWith("data:")) {
             (res.body ?: "").toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it) }
         } else res.body
-        return BookContent.analyzeContent(
-            contentBody,
-            book,
-            bookChapter,
-            bookSource,
-            bookChapter.url,
-            res.url,
-            nextChapterUrl,
-            debugLog = debugger
-        )
+        return try {
+            BookContent.analyzeContent(
+                contentBody,
+                book, bookChapter, bookSource,
+                bookChapter.url, res.url, nextChapterUrl,
+                debugLog = debugger
+            )
+        } catch (e: Exception) {
+            // 规则解析失败，直接用原始响应作为内容（HTML 直出）
+            logger.warn("内容规则解析失败, 使用原始内容: {}", e.localizedMessage)
+            res.body ?: ""
+        }
     }
 
     private fun dataUrlToResponse(dataUrl: String): StrResponse {
