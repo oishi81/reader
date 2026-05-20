@@ -2,12 +2,17 @@ package com.htmake.reader.api.controller
 
 import io.legado.app.data.entities.BookSource
 import io.vertx.ext.web.RoutingContext
+import io.vertx.ext.web.client.WebClient
 import mu.KotlinLogging
 import com.htmake.reader.api.ReturnData
 import com.htmake.reader.utils.asJsonArray
+import com.htmake.reader.utils.SpringContextUtils
 import io.vertx.core.json.JsonObject
 import io.vertx.core.json.JsonArray
 import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 private val logger = KotlinLogging.logger {}
 
@@ -33,36 +38,77 @@ class BookSourceLoginController(coroutineContext: CoroutineContext): BaseControl
             val bookSource = getBookSource(context, bookSourceUrl)
                 ?: return returnData.setErrorMsg("未找到书源")
 
+            val email = loginData?.getString("register_email") ?: loginData?.getString("username") ?: ""
+            val password = loginData?.getString("password") ?: ""
+
+            // 先尝试直接API登录（绕过jsLib兼容问题）
+            val directResult = tryDirectLogin(bookSourceUrl, email, password)
+            if (directResult != null) {
+                // 存储登录信息
+                bookSource.putLoginInfo(loginData?.encode() ?: "{}")
+                bookSource.putLoginHeader(directResult)
+                return returnData.setData(mapOf(
+                    "isLogin" to true,
+                    "loginHeader" to directResult,
+                    "message" to "登录成功(direct)"
+                ))
+            }
+
+            // 备用：尝试jsLib登录
             val loginJs = bookSource.getLoginJs()
-            if (loginJs.isNullOrBlank()) {
-                return returnData.setErrorMsg("该书源没有配置登录")
-            }
-
-            val loginInfo = loginData?.encode() ?: "{}"
-            bookSource.putLoginInfo(loginInfo)
-
-            try {
-                bookSource.login()
-                val loginHeader = bookSource.getLoginHeader()
-                if (!loginHeader.isNullOrBlank()) {
-                    return returnData.setData(mapOf(
-                        "isLogin" to true,
-                        "loginHeader" to loginHeader,
-                        "message" to "登录成功"
-                    ))
-                } else {
-                    return returnData.setData(mapOf(
-                        "isLogin" to false,
-                        "message" to "登录失败，未获取到登录信息"
-                    ))
+            if (!loginJs.isNullOrBlank()) {
+                val loginInfo = loginData?.encode() ?: "{}"
+                bookSource.putLoginInfo(loginInfo)
+                try {
+                    bookSource.login()
+                    val loginHeader = bookSource.getLoginHeader()
+                    if (!loginHeader.isNullOrBlank()) {
+                        return returnData.setData(mapOf(
+                            "isLogin" to true,
+                            "loginHeader" to loginHeader,
+                            "message" to "登录成功"
+                        ))
+                    }
+                } catch (e: Exception) {
+                    logger.warn("jsLib登录失败, 尝试直接API: {}", e.localizedMessage)
                 }
-            } catch (e: Exception) {
-                logger.error("登录JS执行错误: {}", e.localizedMessage)
-                return returnData.setErrorMsg("登录执行错误: ${e.localizedMessage}")
             }
+
+            return returnData.setErrorMsg("登录失败，两种方式均未成功")
         } catch (e: Exception) {
             logger.error("书源登录错误: {}", e.localizedMessage)
             return returnData.setErrorMsg("登录错误: ${e.localizedMessage}")
+        }
+    }
+
+    private suspend fun tryDirectLogin(baseUrl: String, email: String, password: String): String? {
+        return try {
+            val webClient = SpringContextUtils.getBean("webClient", WebClient::class.java)
+            val loginUrl = "$baseUrl/login_api"
+            val body = JsonObject().put("register_email", email).put("password", password)
+            suspendCancellableCoroutine { cont ->
+                webClient.postAbs(loginUrl)
+                    .putHeader("Content-Type", "application/json")
+                    .timeout(15000)
+                    .send { ar ->
+                        if (ar.succeeded()) {
+                            val resp = ar.result()
+                            if (resp.statusCode() == 200) {
+                                val respBody = resp.bodyAsJsonObject()
+                                val token = respBody?.getString("token")
+                                    ?: try { JsonObject(respBody?.getString("data") ?: "").getString("token") } catch (e: Exception) { null }
+                                if (!token.isNullOrBlank()) {
+                                    cont.resume("{\"Cookie\":\"qttoken=$token\"}")
+                                    return@send
+                                }
+                            }
+                        }
+                        cont.resume(null)
+                    }
+            }
+        } catch (e: Exception) {
+            logger.warn("直接登录API失败: {}", e.localizedMessage)
+            null
         }
     }
 
