@@ -233,7 +233,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
 //        val body = if (book != null && bookChapter.url == book.bookUrl && !book.tocHtml.isNullOrEmpty()) {
 //            book.tocHtml
 //        } else {
-        logger.info("bookChapterUrl: {}", bookChapter.url, bookChapter.getAbsoluteURL())
+        logger.info("bookChapterUrl: {}", bookChapter.url, try { bookChapter.getAbsoluteURL() } catch (e: Exception) { "(error: ${e.localizedMessage})" })
         println("=== getBookContent chapter.url=${bookChapter.url} tocUrl=${book.tocUrl} bookSourceUrl=${bookSource.bookSourceUrl}")
         // 处理章节的 data: URL（大灰狼书源章节用 base64 存储章节元数据）
         val contentChapterUrl: String
