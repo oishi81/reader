@@ -6,6 +6,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.http.StrResponse
 import io.legado.app.model.analyzeRule.AnalyzeUrl
+import io.legado.app.utils.NetworkUtils
 import io.legado.app.model.webBook.BookChapterList
 import io.legado.app.model.webBook.BookContent
 import io.legado.app.model.webBook.BookInfo
@@ -233,9 +234,14 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
 //            book.tocHtml
 //        } else {
         logger.info("bookChapterUrl: {}", bookChapter.url, bookChapter.getAbsoluteURL())
+        // 如果 tocUrl 是 data: URL，用书源 URL 作为章节链接的 base
+        val contentBaseUrl = if (book.tocUrl.startsWith("data:")) bookSource.bookSourceUrl else book.tocUrl
+        val contentChapterUrl = if (book.tocUrl.startsWith("data:")) {
+            NetworkUtils.getAbsoluteURL(contentBaseUrl, bookChapter.url)
+        } else bookChapter.getAbsoluteURL()
         val analyzeUrl = AnalyzeUrl(
-            mUrl = bookChapter.getAbsoluteURL(),
-            baseUrl = book.tocUrl,
+            mUrl = contentChapterUrl,
+            baseUrl = contentBaseUrl,
             source = bookSource,
             ruleData = book,
             chapter = bookChapter,
