@@ -654,7 +654,12 @@ class AnalyzeRule(
         bindings["title"] = chapter?.title
         bindings["src"] = content
         bindings["nextChapterUrl"] = nextChapterUrl
-        return SCRIPT_ENGINE.eval(jsStr, bindings)
+        // 注入jsLib（共享JS库）
+        val lib = (source as? io.legado.app.data.entities.BookSource)?.jsLib
+        val finalJs = if (!lib.isNullOrBlank() && !jsStr.contains("function getArguments")) {
+            "var _json_parse=JSON.parse;JSON.parse=function(s){if(s==null)throw new Error('JSON.parse:null');return _json_parse(s);};$lib;\n$jsStr"
+        } else jsStr
+        return SCRIPT_ENGINE.eval(finalJs, bindings)
     }
 
     override fun getSource(): BaseSource? {
