@@ -257,6 +257,6 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
         val body = if (isBase64) {
             try { String(java.util.Base64.getDecoder().decode(data)) } catch (e: Exception) { data }
         } else data
-        return StrResponse(dataUrl, body)
+        return StrResponse("http://data.local/", body)
     }
 }
