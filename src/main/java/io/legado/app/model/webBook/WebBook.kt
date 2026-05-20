@@ -234,6 +234,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
 //            book.tocHtml
 //        } else {
         logger.info("bookChapterUrl: {}", bookChapter.url, bookChapter.getAbsoluteURL())
+        println("=== getBookContent chapter.url=${bookChapter.url} tocUrl=${book.tocUrl} bookSourceUrl=${bookSource.bookSourceUrl}")
         // 如果 tocUrl 是 data: URL，用书源 URL 作为章节链接的 base
         val contentBaseUrl = if (book.tocUrl.startsWith("data:")) bookSource.bookSourceUrl else book.tocUrl
         val contentChapterUrl = if (book.tocUrl.startsWith("data:")) {
