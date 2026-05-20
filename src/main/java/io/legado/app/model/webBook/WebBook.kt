@@ -253,7 +253,12 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
     private fun dataUrlToResponse(dataUrl: String): StrResponse {
         val commaIdx = dataUrl.indexOf(',')
         val isBase64 = dataUrl.substring(0, commaIdx).contains("base64")
-        val data = dataUrl.substring(commaIdx + 1)
+        var data = dataUrl.substring(commaIdx + 1)
+        // data:;base64,<b64>,{\"type\":\"xxx\"} — 分离 base64 和附加 JSON
+        if (isBase64) {
+            val b64End = data.indexOf("=,{\"")
+            if (b64End > 0) data = data.substring(0, b64End + 1)
+        }
         val body = if (isBase64) {
             try { String(java.util.Base64.getDecoder().decode(data)) } catch (e: Exception) { data }
         } else data
