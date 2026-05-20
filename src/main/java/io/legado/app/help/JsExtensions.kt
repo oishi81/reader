@@ -225,6 +225,10 @@ interface JsExtensions {
         return EncoderUtils.base64Decode(str, flags)
     }
 
+    fun hexDecodeToString(hexStr: String): String {
+        return EncoderUtils.hexDecodeToString(hexStr)
+    }
+
     fun base64DecodeToByteArray(str: String?): ByteArray? {
         if (str.isNullOrBlank()) {
             return null
