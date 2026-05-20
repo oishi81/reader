@@ -262,13 +262,10 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
             sourceRegex = bookSource.getContentRule().sourceRegex,
             debugLog = debugger
         )
-        // 大灰狼书源内容规则用 java.hexDecodeToString(result)，body 需 hex 编码
-        val contentBody = if (bookChapter.url.startsWith("data:")) {
-            (res.body ?: "").toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it) }
-        } else res.body
+        // 大灰狼书源：内容规则用 java.hexDecodeToString，但 body 为 HTML 时 hexDecodeToString 自动跳过
         return try {
             BookContent.analyzeContent(
-                contentBody,
+                res.body ?: "",
                 book, bookChapter, bookSource,
                 bookChapter.url, res.url, nextChapterUrl,
                 debugLog = debugger
@@ -314,13 +311,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
         val itemId = obj?.getString("item_id") ?: ""
         val sources = obj?.getString("sources") ?: ""
 
-        // 优先从 js 表达式提取 URL，否则用服务端构造
-        val jsExpr = extraJson?.getString("js")
-        if (!jsExpr.isNullOrBlank()) {
-            // js: "book ? result : 'http://...'"
-            val m = Regex("'(http[^']+)'").find(jsExpr)
-            if (m != null) return m.groupValues[1]
-        }
+        // 优先构造服务端 URL（带 Cookie），不走 js 表达式中的 IP 直连
         return "$serverUrl/get_review?book_id=$bookId&item_id=$itemId&ssionid=&source=$sources"
     }
 }

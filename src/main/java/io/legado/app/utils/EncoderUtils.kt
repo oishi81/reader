@@ -340,6 +340,8 @@ object EncoderUtils {
 
     fun hexDecodeToString(hexStr: String): String {
         var s = hexStr.trim()
+        // 如果不是纯 hex（含 HTML 标签等非 hex 字符），直接返回原文
+        if (!s.matches(Regex("^[0-9a-fA-F]*$"))) return hexStr
         if (s.length % 2 != 0) s = "0$s"  // pad odd-length
         val len = s.length
         val data = ByteArray(len / 2)
