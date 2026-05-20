@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.text.Charsets
 
 private val logger = KotlinLogging.logger {}
 
@@ -264,6 +265,8 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
         val body = if (isBase64) {
             try { String(java.util.Base64.getDecoder().decode(data)) } catch (e: Exception) { data }
         } else data
-        return StrResponse("http://data.local/", body)
+        // 书源 init 规则用 java.hexDecodeToString(result) 解码，body 需 hex 编码
+        val hexBody = body.toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it) }
+        return StrResponse("http://data.local/", hexBody)
     }
 }
