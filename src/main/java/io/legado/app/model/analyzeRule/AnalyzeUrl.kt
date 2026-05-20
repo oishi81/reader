@@ -246,7 +246,11 @@ class AnalyzeUrl(
         bindings["result"] = result
         // 注入jsLib（大灰狼等书源的共享JS库）
         val lib = (source as? io.legado.app.data.entities.BookSource)?.jsLib
-        val finalJs = if (lib.isNullOrBlank()) jsStr else "$lib;\n$jsStr"
+        val finalJs = if (lib.isNullOrBlank()) jsStr else {
+            // Rhino 的 JSON.parse(null) 返回 null 而不是抛异常
+            // 修复：让 JSON.parse(null) 抛异常，使 jsLib 的 getArguments fallback 生效
+            "var _json_parse=JSON.parse;JSON.parse=function(s){if(s==null)throw new Error('JSON.parse:null');return _json_parse(s);};$lib;\n$jsStr"
+        }
         return SCRIPT_ENGINE.eval(finalJs, bindings)
     }
 

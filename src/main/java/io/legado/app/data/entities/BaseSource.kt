@@ -159,8 +159,11 @@ interface BaseSource : JsExtensions {
         bindings["cookie"] = CookieStore
         bindings["cache"] = CacheManager
         // 注入jsLib（大灰狼等书源的共享JS库），使host/getArguments/setArguments等变量可用
+        // 修复Rhino的JSON.parse(null)不抛异常问题
         val lib = (this as? BookSource)?.jsLib
-        val combinedJs = if (lib.isNullOrBlank()) jsStr else "$lib;\n$jsStr"
+        val combinedJs = if (lib.isNullOrBlank()) jsStr else {
+            "var _json_parse=JSON.parse;JSON.parse=function(s){if(s==null)throw new Error('JSON.parse:null');return _json_parse(s);};$lib;\n$jsStr"
+        }
         return AppConst.SCRIPT_ENGINE.eval(combinedJs, bindings)
     }
 }
