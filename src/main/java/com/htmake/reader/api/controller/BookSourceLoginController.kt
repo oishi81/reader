@@ -102,8 +102,9 @@ class BookSourceLoginController(coroutineContext: CoroutineContext): BaseControl
 
             if (code == 200) {
                 val respJson = JsonObject(respText)
-                // Try various token paths
-                val token = respJson.getString("token")
+                // Try various token paths: key, token, data.token
+                val token = respJson.getString("key")
+                    ?: respJson.getString("token")
                     ?: try { JsonObject(respJson.getString("data") ?: "").getString("token") } catch (e: Exception) { null }
                     ?: try { respJson.getJsonObject("data")?.getString("token") } catch (e: Exception) { null }
                 
