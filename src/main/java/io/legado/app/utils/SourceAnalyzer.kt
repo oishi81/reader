@@ -79,7 +79,8 @@ object SourceAnalyzer {
                         ?: throw NoStackTraceException("格式不对")
                     bookSourceName = jsonItem.readString("bookSourceName") ?: ""
                     bookSourceGroup = jsonItem.readString("bookSourceGroup")
-                    // loginUrl = jsonItem.readString("loginUrl")
+                    loginUrl = jsonItem.readString("loginUrl")
+                    jsLib = jsonItem.readString("jsLib")
                     // loginUi = jsonItem.readString("loginUi")
                     // loginCheckJs = jsonItem.readString("loginCheckJs")
                     bookSourceComment = jsonItem.readString("bookSourceComment") ?: ""
@@ -173,6 +174,7 @@ object SourceAnalyzer {
                 //     sourceAny.loginUi?.toString()
                 // }
                 source.loginCheckJs = sourceAny.loginCheckJs
+                source.jsLib = sourceAny.jsLib
                 source.bookSourceComment = sourceAny.bookSourceComment
                 source.lastUpdateTime = sourceAny.lastUpdateTime
                 source.respondTime = sourceAny.respondTime
@@ -233,6 +235,7 @@ object SourceAnalyzer {
         var loginUrl: Any? = null,                      // 登录规则
         var loginUi: Any? = null,                       // 登录UI
         var loginCheckJs: String? = null,               //登录检测js
+        var jsLib: String? = null,                      // JS共享库
         var bookSourceComment: String? = "",            //书源注释
         var lastUpdateTime: Long = 0,                   // 最后更新时间，用于排序
         var respondTime: Long = 180000L,                // 响应时间，用于排序
