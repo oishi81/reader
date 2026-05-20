@@ -339,13 +339,13 @@ object EncoderUtils {
     }
 
     fun hexDecodeToString(hexStr: String): String {
-        val len = hexStr.length
+        var s = hexStr.trim()
+        if (s.length % 2 != 0) s = "0$s"  // pad odd-length
+        val len = s.length
         val data = ByteArray(len / 2)
-        var i = 0
-        while (i < len) {
-            data[i / 2] = ((Character.digit(hexStr[i], 16) shl 4)
-                    + Character.digit(hexStr[i + 1], 16)).toByte()
-            i += 2
+        for (i in 0 until len step 2) {
+            data[i / 2] = ((Character.digit(s[i], 16) shl 4)
+                    + Character.digit(s[i + 1], 16)).toByte()
         }
         return String(data, Charsets.UTF_8)
     }
