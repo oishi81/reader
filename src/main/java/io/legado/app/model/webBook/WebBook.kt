@@ -196,11 +196,16 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
                 ruleData = book,
                 headerMapF = bookSource.getHeaderMap(true)
             )
-            var res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
-            //检测书源是否已登录
-            bookSource.loginCheckJs?.let { checkJs ->
-                if (checkJs.isNotBlank()) {
-                    res = analyzeUrl.evalJS(checkJs, result = res) as StrResponse
+            var res: StrResponse
+            if (book.tocUrl.startsWith("data:")) {
+                res = dataUrlToResponse(book.tocUrl)
+            } else {
+                res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
+                // 检测书源是否已登录
+                bookSource.loginCheckJs?.let { checkJs ->
+                    if (checkJs.isNotBlank()) {
+                        res = analyzeUrl.evalJS(checkJs, result = res) as StrResponse
+                    }
                 }
             }
             return BookChapterList.analyzeChapterList(book, res.body, bookSource, book.tocUrl, res.url, debugLog = debugger)
