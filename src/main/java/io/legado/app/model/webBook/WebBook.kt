@@ -155,6 +155,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
         // 处理 data: URL（大灰狼书源搜索结果使用 base64 编码书数据）
         if (book.bookUrl.startsWith("data:")) {
             res = dataUrlToResponse(book.bookUrl)
+            logger.info("dataUrlToResponse body (first 200): {}", res.body?.take(200))
         } else {
             res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
             // 检测书源是否已登录
