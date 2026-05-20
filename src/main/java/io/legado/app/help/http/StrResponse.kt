@@ -62,6 +62,12 @@ class StrResponse {
 
     fun isSuccessful(): Boolean = raw.isSuccessful
 
+    // jsLib 兼容：返回响应的 host（如 "api.langge.cf"）
+    fun server(): String {
+        return raw.request.url.host
+    }
+    val server: String get() = server()
+
     fun errorBody(): ResponseBody? {
         return errorBody
     }
