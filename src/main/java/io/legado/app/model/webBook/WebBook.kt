@@ -151,11 +151,17 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
             ruleData = book,
             headerMapF = bookSource.getHeaderMap(true)
         )
-        var res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
-        //检测书源是否已登录
-        bookSource.loginCheckJs?.let { checkJs ->
-            if (checkJs.isNotBlank()) {
-                res = analyzeUrl.evalJS(checkJs, result = res) as StrResponse
+        var res: StrResponse
+        // 处理 data: URL（大灰狼书源搜索结果使用 base64 编码书数据）
+        if (book.bookUrl.startsWith("data:")) {
+            res = dataUrlToResponse(book.bookUrl)
+        } else {
+            res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
+            // 检测书源是否已登录
+            bookSource.loginCheckJs?.let { checkJs ->
+                if (checkJs.isNotBlank()) {
+                    res = analyzeUrl.evalJS(checkJs, result = res) as StrResponse
+                }
             }
         }
 
@@ -242,5 +248,15 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
             nextChapterUrl,
             debugLog = debugger
         )
+    }
+
+    private fun dataUrlToResponse(dataUrl: String): StrResponse {
+        val commaIdx = dataUrl.indexOf(',')
+        val isBase64 = dataUrl.substring(0, commaIdx).contains("base64")
+        val data = dataUrl.substring(commaIdx + 1)
+        val body = if (isBase64) {
+            try { String(java.util.Base64.getDecoder().decode(data)) } catch (e: Exception) { data }
+        } else data
+        return StrResponse(dataUrl, body)
     }
 }
