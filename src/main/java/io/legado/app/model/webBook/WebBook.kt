@@ -262,8 +262,12 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
             sourceRegex = bookSource.getContentRule().sourceRegex,
             debugLog = debugger
         )
+        // 大灰狼书源内容规则用 java.hexDecodeToString(result)，body 需 hex 编码
+        val contentBody = if (bookChapter.url.startsWith("data:")) {
+            (res.body ?: "").toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it) }
+        } else res.body
         return BookContent.analyzeContent(
-            res.body,
+            contentBody,
             book,
             bookChapter,
             bookSource,
