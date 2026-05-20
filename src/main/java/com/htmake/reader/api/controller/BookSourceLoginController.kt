@@ -36,12 +36,23 @@ class BookSourceLoginController(coroutineContext: CoroutineContext): BaseControl
             val email = loginData?.getString("register_email") ?: loginData?.getString("username") ?: ""
             val password = loginData?.getString("password") ?: ""
 
-            // 先尝试直接API登录（绕过jsLib兼容问题）
+            // 先尝试直接API登录
             val directResult = tryDirectLogin(bookSourceUrl, email, password)
             if (directResult != null) {
-                // 存储登录信息
                 bookSource.putLoginInfo(loginData?.encode() ?: "{}")
                 bookSource.putLoginHeader(directResult)
+                // 保存 source variable（搜索/浏览依赖此变量中的 server 等信息）
+                val initVar = JsonObject()
+                    .put("server", bookSourceUrl)
+                    .put("sources", "书源")
+                    .put("tab", "小说")
+                    .put("source_type", "视频")
+                    .put("find_source", "发现")
+                    .put("find_tab", "小说")
+                    .put("tone_id", "默认音色")
+                    .put("fqpara", "on")
+                    .encode()
+                bookSource.setVariable(initVar)
                 return returnData.setData(mapOf(
                     "isLogin" to true,
                     "loginHeader" to directResult,
