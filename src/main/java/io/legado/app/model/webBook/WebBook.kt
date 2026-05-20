@@ -235,11 +235,20 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
 //        } else {
         logger.info("bookChapterUrl: {}", bookChapter.url, bookChapter.getAbsoluteURL())
         println("=== getBookContent chapter.url=${bookChapter.url} tocUrl=${book.tocUrl} bookSourceUrl=${bookSource.bookSourceUrl}")
-        // 如果 tocUrl 是 data: URL，用书源 URL 作为章节链接的 base
-        val contentBaseUrl = if (book.tocUrl.startsWith("data:")) bookSource.bookSourceUrl else book.tocUrl
-        val contentChapterUrl = if (book.tocUrl.startsWith("data:")) {
-            NetworkUtils.getAbsoluteURL(contentBaseUrl, bookChapter.url)
-        } else bookChapter.getAbsoluteURL()
+        // 处理章节的 data: URL（大灰狼书源章节用 base64 存储章节元数据）
+        val contentChapterUrl: String
+        val contentBaseUrl: String
+        if (bookChapter.url.startsWith("data:") && book.tocUrl.startsWith("data:")) {
+            contentBaseUrl = bookSource.bookSourceUrl
+            // 从章节 data URL 中提取实际内容 URL
+            contentChapterUrl = decodeChapterDataUrl(bookChapter.url, bookSource.bookSourceUrl)
+        } else if (book.tocUrl.startsWith("data:")) {
+            contentBaseUrl = bookSource.bookSourceUrl
+            contentChapterUrl = NetworkUtils.getAbsoluteURL(contentBaseUrl, bookChapter.url)
+        } else {
+            contentBaseUrl = book.tocUrl
+            contentChapterUrl = bookChapter.getAbsoluteURL()
+        }
         val analyzeUrl = AnalyzeUrl(
             mUrl = contentChapterUrl,
             baseUrl = contentBaseUrl,
@@ -280,5 +289,32 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
         // 书源 init 规则用 java.hexDecodeToString(result) 解码，body 需 hex 编码
         val hexBody = body.toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it) }
         return StrResponse("http://data.local/", hexBody)
+    }
+
+    private fun decodeChapterDataUrl(dataUrl: String, serverUrl: String): String {
+        // 解析 data:;base64,<b64>,{jsExpr} — 提取 js 表达式拼出内容 URL
+        val commaIdx = dataUrl.indexOf(',')
+        var data = dataUrl.substring(commaIdx + 1)
+        val b64End = data.indexOf("=,{\"")
+        val extraJson = if (b64End > 0) {
+            val json = data.substring(b64End + 1)  // {"type":"qingtian3","js":"..."}
+            data = data.substring(0, b64End + 1)
+            try { io.vertx.core.json.JsonObject(json) } catch (e: Exception) { null }
+        } else null
+
+        val decoded = try { String(java.util.Base64.getDecoder().decode(data)) } catch (e: Exception) { data }
+        val obj = try { io.vertx.core.json.JsonObject(decoded) } catch (e: Exception) { null }
+        val bookId = obj?.getString("book_id") ?: ""
+        val itemId = obj?.getString("item_id") ?: ""
+        val sources = obj?.getString("sources") ?: ""
+
+        // 优先从 js 表达式提取 URL，否则用服务端构造
+        val jsExpr = extraJson?.getString("js")
+        if (!jsExpr.isNullOrBlank()) {
+            // js: "book ? result : 'http://...'"
+            val m = Regex("'(http[^']+)'").find(jsExpr)
+            if (m != null) return m.groupValues[1]
+        }
+        return "$serverUrl/get_review?book_id=$bookId&item_id=$itemId&ssionid=&source=$sources"
     }
 }
