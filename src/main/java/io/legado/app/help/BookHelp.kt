@@ -133,7 +133,8 @@ object BookHelp {
             val matcher = AppPattern.imgPattern.matcher(it)
             if (matcher.find()) {
                 matcher.group(1)?.let { src ->
-                    val mSrc = NetworkUtils.getAbsoluteURL(bookChapter.url, src)
+                    val baseForImage = if (bookChapter.url.startsWith("data:")) bookSource.bookSourceUrl else bookChapter.url
+                    val mSrc = NetworkUtils.getAbsoluteURL(baseForImage, src)
                     val req: Deferred<Int> = scope.async {
                         saveImage(bookSource, book, mSrc)
                         return@async 1
