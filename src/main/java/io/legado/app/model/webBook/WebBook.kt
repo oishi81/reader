@@ -283,6 +283,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
                 .replace(Regex("&amp;"), "&").replace(Regex("&quot;"), "\"")
                 .replace(Regex("\\n\\s*\\n"), "\n")
             cleaned
+        }
     }
 
     private fun dataUrlToResponse(dataUrl: String): StrResponse {
