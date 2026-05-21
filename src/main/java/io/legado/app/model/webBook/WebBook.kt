@@ -271,10 +271,18 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
                 debugLog = debugger
             )
         } catch (e: Exception) {
-            // 规则解析失败，直接用原始响应作为内容（HTML 直出）
-            logger.warn("内容规则解析失败, 使用原始内容: {}", e.localizedMessage)
-            res.body ?: ""
-        }
+            // 规则解析失败，提取 HTML body 中的文本内容
+            logger.warn("内容规则解析失败, 提取HTML正文: {}", e.localizedMessage)
+            val html = res.body ?: ""
+            // 去掉 <style> 和 <script>
+            val cleaned = html.replace(Regex("<style[^>]*>[\\s\\S]*?</style>", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("<script[^>]*>[\\s\\S]*?</script>", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("<[^>]+>"), "\n")
+                .replace(Regex("&nbsp;"), " ")
+                .replace(Regex("&lt;"), "<").replace(Regex("&gt;"), ">")
+                .replace(Regex("&amp;"), "&").replace(Regex("&quot;"), "\"")
+                .replace(Regex("\\n\\s*\\n"), "\n")
+            cleaned
     }
 
     private fun dataUrlToResponse(dataUrl: String): StrResponse {
